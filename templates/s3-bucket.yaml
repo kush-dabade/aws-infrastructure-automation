@@ -1,0 +1,109 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Experiment 6 - Automate and Manage AWS Infrastructure.
+  Provisions a private, encrypted S3 bucket that only accepts HTTPS requests.
+
+# ---------------------------------------------------------------------------
+# Parameters: values supplied at deploy time so the same template can be
+# reused for different environments without editing the code.
+# ---------------------------------------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: exp6-iac
+    Description: Short project name used in the bucket name and tags.
+    AllowedPattern: "^[a-z0-9][a-z0-9-]{1,18}[a-z0-9]$"
+    ConstraintDescription: 3-20 characters; lowercase letters, numbers and hyphens only.
+
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - test
+    Description: Deployment environment, used in the bucket name and tags.
+
+  Owner:
+    Type: String
+    Default: student
+    Description: Person responsible for these resources (tag only).
+    MinLength: 1
+    MaxLength: 64
+
+# ---------------------------------------------------------------------------
+# Resources: the AWS infrastructure CloudFormation will create and manage.
+# ---------------------------------------------------------------------------
+Resources:
+  ProjectBucket:
+    Type: AWS::S3::Bucket
+    # Delete the bucket when the stack is deleted, so cleanup leaves nothing
+    # behind. (CloudFormation can only delete the bucket once it is empty.)
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      # Globally unique and readable, e.g. exp6-iac-dev-<account-id>-ap-south-1.
+      # The account ID comes from a pseudo parameter, so nothing is hard-coded.
+      BucketName: !Sub "${ProjectName}-${Environment}-${AWS::AccountId}-${AWS::Region}"
+
+      # Encrypt every object at rest with S3-managed keys (SSE-S3). No extra cost.
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      # Block every form of public access: public ACLs and public bucket policies.
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+      # Disable ACLs entirely; access is controlled only by IAM and bucket policies.
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Reject any request that does not use HTTPS (encryption in transit).
+  ProjectBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ProjectBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt ProjectBucket.Arn
+              - !Sub "${ProjectBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+# ---------------------------------------------------------------------------
+# Outputs: values printed after deployment and used by the verification steps.
+# ---------------------------------------------------------------------------
+Outputs:
+  BucketName:
+    Description: Name of the S3 bucket.
+    Value: !Ref ProjectBucket
+
+  BucketArn:
+    Description: ARN of the S3 bucket.
+    Value: !GetAtt ProjectBucket.Arn
+
+  BucketRegion:
+    Description: Region the bucket was created in.
+    Value: !Ref AWS::Region

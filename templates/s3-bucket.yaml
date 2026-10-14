@@ -25,7 +25,7 @@ Parameters:
 
   Owner:
     Type: String
-    Default: student
+    Default: kush
     Description: Person responsible for these resources (tag only).
     MinLength: 1
     MaxLength: 64

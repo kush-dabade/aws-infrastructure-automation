@@ -63,6 +63,11 @@ Resources:
         Rules:
           - ObjectOwnership: BucketOwnerEnforced
 
+      # Keep every version of each object, so overwritten or deleted objects
+      # can be recovered. (Stage 3 update.)
+      VersioningConfiguration:
+        Status: Enabled
+
       Tags:
         - Key: Project
           Value: !Ref ProjectName
